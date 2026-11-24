@@ -1,0 +1,130 @@
+modules:
+  # --- Jira issue panel: one-tap translation of summary + description,
+  # --- with a per-project glossary editor. UI Kit (render: native).
+  jira:issuePanel:
+    - key: sambungkata-issue-panel
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: SambungKata Translator
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  # --- Confluence byline item: translate the page title + excerpt in place.
+  confluence:contentBylineItem:
+    - key: sambungkata-page-byline
+      resource: byline
+      resolver:
+        function: resolver
+      render: native
+      title: SambungKata translation
+      tooltip: Translate this page's title and summary with SambungKata
+  # --- Rovo agent whose actions other agents can also reuse.
+  rovo:agent:
+    - key: sambungkata-agent
+      name: SambungKata Translator
+      description: >
+        Translates Jira issues and free text between English, Indonesian,
+        Javanese and other languages, honouring each project's glossary.
+      prompt: >
+        You are SambungKata, a translation teammate for distributed teams
+        working in Jira and Confluence. You translate between English,
+        Indonesian (Bahasa Indonesia), Javanese (Basa Jawa) and other major
+        languages. When the user asks you to translate free text, use the
+        translate-text action. When the user asks you to translate a Jira
+        issue (by key, or "this issue"), use the translate-issue action.
+        If the user has not told you the target language, ask them which
+        language they want before calling an action. Always present the
+        translated text clearly, and mention the source issue or text you
+        translated.
+      conversationStarters:
+        - Translate this issue into Indonesian
+        - Translate "Sprint planning moved to Friday" into Javanese
+        - Translate issue text I give you into English
+      actions:
+        - translate-text
+        - translate-issue
+  # --- Reusable actions backing the agent (also callable by other agents).
+  action:
+    - key: translate-text
+      function: translateTextFn
+      actionVerb: GET
+      description: >
+        Translates a piece of free text into a target language. Use this
+        when the user provides text directly and asks for a translation.
+      inputs:
+        text:
+          title: Text
+          type: string
+          required: true
+          description: The text to translate.
+        targetLanguage:
+          title: Target language
+          type: string
+          required: true
+          description: >
+            ISO 639-1 code of the language to translate into, e.g. "id" for
+            Indonesian, "jv" for Javanese, "en" for English, "es" for Spanish.
+        sourceLanguage:
+          title: Source language
+          type: string
+          required: false
+          description: >
+            ISO 639-1 code of the source language, if known. Omit to let the
+            translator detect it.
+    - key: translate-issue
+      function: translateIssueFn
+      actionVerb: GET
+      description: >
+        Fetches a Jira issue by key and translates its summary and
+        description into a target language, using the project's glossary.
+        Use this when the user asks to translate an issue.
+      inputs:
+        issueKey:
+          title: Jira issue key
+          type: string
+          required: true
+          description: The key of the Jira issue to translate, e.g. "PROJ-123".
+        targetLanguage:
+          title: Target language
+          type: string
+          required: true
+          description: >
+            ISO 639-1 code of the language to translate into, e.g. "id" for
+            Indonesian, "jv" for Javanese, "en" for English.
+  # --- Atlassian-hosted LLMs (primary translation engine; no egress, no keys).
+  llm:
+    - key: sambungkata-llm
+      model:
+        - claude
+  function:
+    - key: resolver
+      handler: index.handler
+    - key: translateTextFn
+      handler: index.translateTextAction
+    - key: translateIssueFn
+      handler: index.translateIssueAction
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+  - key: byline
+    path: src/frontend/byline.jsx
+app:
+  runtime:
+    name: nodejs24.x
+  # Placeholder: `forge register` (or `forge create`) replaces this with the
+  # real app id (ari:cloud:ecosystem::app/<uuid>) once an Atlassian account
+  # exists. Do NOT add a `license` section: licensed apps cannot be shared
+  # with judges via an installation link.
+  id: '<run forge register to get your app id>'
+permissions:
+  scopes:
+    - read:jira-work
+    - read:page:confluence
+    - storage:app
+  external:
+    fetch:
+      backend:
+        # Only used by the OPTIONAL external translation provider in
+        # src/translate.js, and only when its env vars are set. The default
+        # Forge LLM path needs no egress at all.
+        - 'https://translation.googleapis.com'
